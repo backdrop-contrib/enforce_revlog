@@ -1,0 +1,102 @@
+<?php
+// $Id$
+
+/**
+* Implementation of hook_perm().
+* 
+* Adding permission for some roles to skip the checking.
+*/
+function enforce_revlog_perm() {
+  return array('skip revision log message');
+}
+
+/**
+ * Implementation of hook_menu().
+ * 
+ * Administration page for Enforce revlog
+ */
+function enforce_revlog_menu() {
+  $items = array();
+  $items['admin/settings/enforce_revlog'] = array(
+    'title' => t('Enforce revlog'),
+    'description' => 'Enforce users to enter a log message for every revision.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('enforce_revlog_settings'),
+    'access callback' => 'user_access',
+    'access arguments' => array('administer site configuration'),
+  );
+  return $items;
+}
+
+// Content of the settings page
+function enforce_revlog_settings() {
+  $form['enforce_revlog_admin_skip'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Skip log message checking for administrators'),
+    '#default_value' => variable_get('enforce_revlog_admin_skip', 1),
+    '#description' => t('Are users with \'administer nodes\' permission allowed not to enter a log message?'),
+  );
+  
+  $form['types'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Enforce users to enter a log message for every revision of these content types'),
+  );
+  // Generate per content-type settings
+  foreach (node_get_types() as $type => $name) {
+    $form['types']['enforce_revlog_node_type_' . $type] = array(
+      '#type' => 'checkbox',
+      '#title' => $type,
+      '#default_value' => variable_get(enforce_revlog_node_type_ . $type, 0),
+    );
+  }
+
+  
+  return system_settings_form($form);
+}
+
+/**
+* Implementation of hook_nodeapi()
+*
+* Displays a message when the revision log is empty.
+*/
+function enforce_revlog_nodeapi(&$node, $op, $arg = 0) {
+
+  switch($op) {
+    case 'validate':
+      // For enabled content types:
+      // If revision is checked and log message is empty, complain,
+      // unless this is new content or you have the right permissions.
+      if ($node->revision && variable_get(enforce_revlog_node_type_ . $node->type, 0) && $node->nid && empty($node->log)) {
+        if (user_access('skip revision log message')) {
+          break;
+        }
+        elseif (user_access('administer nodes')) {
+          // Check if administrators can leave the log message empty
+          if (variable_get('enforce_revlog_admin_skip', 1)) {
+            break;
+          }
+          else {
+            form_set_error('log', t('Please enter a revision log message or uncheck the revision checkbox.'));
+          }
+        }
+        else {
+          form_set_error('log', t('Please enter a revision log message.'));
+        }
+      }
+  }
+}
+
+/**
+* Implementation of hook_help()
+*/
+function enforce_revlog_help($path, $arg) {
+  
+  switch ($path) {
+    case 'admin/help#enforce_revlog':
+      // Help page
+      return '<p>' . t('Enforce users to enter a log message for every revision.') . '</p>';
+    case 'admin/settings/enforce_revlog':
+      // Settings page header
+      return '<p>' . t('Settings for the Enforce revlog module.') . '</p>';
+  }
+}

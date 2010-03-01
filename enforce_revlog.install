@@ -1,0 +1,14 @@
+<?php
+// $Id$
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function enforce_revlog_uninstall() {
+  // Delete admin_skip variable.
+    variable_del(enforce_revlog_admin_skip);
+  // Delete node type mapping variables.
+  foreach (node_get_types() as $type => $name) {
+    variable_del(enforce_revlog_node_type_ . $type);
+  }
+}
