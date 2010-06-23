@@ -1,6 +1,11 @@
 <?php
 // $Id$
 
+/* TODO
+ * More doc
+ * Display help message after installation
+ * */
+
 /**
 * Implementation of hook_perm().
 * 
@@ -18,28 +23,34 @@ function enforce_revlog_perm() {
 function enforce_revlog_menu() {
   $items = array();
   $items['admin/settings/enforce_revlog'] = array(
-    'title' => t('Enforce revlog'),
+    'title' => 'Enforce revlog',
     'description' => 'Enforce users to enter a log message for every revision.',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('enforce_revlog_settings'),
     'access callback' => 'user_access',
     'access arguments' => array('administer site configuration'),
   );
+  $items['enforce_revlog/js'] = array(
+    'page callback' => 'enforce_revlog_js',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
   return $items;
 }
 
 // Content of the settings page
 function enforce_revlog_settings() {
-  $form['enforce_revlog_admin_skip'] = array(
-    '#type' => 'checkbox',
-    '#title' => t('Skip log message checking for administrators'),
-    '#default_value' => variable_get('enforce_revlog_admin_skip', 1),
-    '#description' => t('Are users with \'administer nodes\' permission allowed not to enter a log message?'),
+  $form['info_msg'] = array(
+    '#type' => 'markup',  // not necessary (default value), added for exhaustivity
+    '#value' => t('Do not forget to <a href="@setperms">set permissions</a> for roles that will be able to skip entering a log message', array('@setperms' => url('admin/user/permissions', array('fragment' => 'module-enforce_revlog')))),  // use placeholder and url() as it's best practice for these translatable strings
+    '#prefix' => '<p><em>',
+    '#suffix' => '</em></p>',
   );
   
   $form['types'] = array(
     '#type' => 'fieldset',
     '#title' => t('Enforce users to enter a log message for every revision of these content types'),
+    '#description' => t('Each selected content type must have revisions enabled for this module to work'),
   );
   // Generate per content-type settings
   foreach (node_get_types() as $type => $name) {
@@ -61,25 +72,22 @@ function enforce_revlog_settings() {
 */
 function enforce_revlog_nodeapi(&$node, $op, $arg = 0) {
 
-  switch($op) {
+  switch ($op) {
     case 'validate':
-      // For enabled content types:
-      // If revision is checked and log message is empty, complain,
-      // unless this is new content or you have the right permissions.
+      /* For enabled content types:
+      * If revision is checked and log message is empty, complain,
+      * unless this is new content or user is allowed to.
+      * Don't bother if user is only previewing the node. */
       if ($node->revision && variable_get(enforce_revlog_node_type_ . $node->type, 0) && $node->nid && empty($node->log)) {
         if (user_access('skip revision log message')) {
           break;
         }
         elseif (user_access('administer nodes')) {
-          // Check if administrators can leave the log message empty
-          if (variable_get('enforce_revlog_admin_skip', 1)) {
-            break;
-          }
-          else {
-            form_set_error('log', t('Please enter a revision log message or uncheck the revision checkbox.'));
-          }
+          // Adjust the message for administrators, who can choose not to create a new revision
+          form_set_error('log', t('Please enter a revision log message or uncheck the revision checkbox.'));
         }
         else {
+          // Standard error message
           form_set_error('log', t('Please enter a revision log message.'));
         }
       }
@@ -99,4 +107,65 @@ function enforce_revlog_help($path, $arg) {
       // Settings page header
       return '<p>' . t('Settings for the Enforce revlog module.') . '</p>';
   }
+}
+
+/**
+* Implementation of hook_form_alter().
+* 
+* Trying to identify all node forms to enable log message textarea as required
+*/
+
+function enforce_revlog_form_alter(&$form, $form_state, $form_id) {
+  if (isset($form['#id']) && $form['#id'] == 'node-form') {
+    $form_name = $form['type']['#value'] . '_node_form';
+    switch ($form_id) {
+      case $form_name:
+        // identify if we should require a log message for this content type with this user
+        if (
+          variable_get(enforce_revlog_node_type_ . $form['type']['#value'], 1)
+          && !user_access('skip revision log message', 1)
+          ) {
+          $form['revision_information']['revision']['#ahah'] = array(
+            'event' => 'change',  // not necessary (default value), added for exhaustivity
+            'path' => 'enforce_revlog/js',
+            'wrapper' => 'edit-log-wrapper',
+          );
+          if (isset($form['#node']) && $form['#node']->revision) {
+            $form['revision_information']['log']['#required'] = TRUE;
+          }
+        }
+        break;
+    }
+  }
+}
+
+function enforce_revlog_js() {
+  $form_state = array('submitted' =>  FALSE);
+  $form_build_id = $_POST['form_build_id'];
+  // Add the new element to the stored form. Without adding the element to the
+  // form, Drupal is not aware of this new element's existence and will not
+  // process it. We retreive the cached form, add the element, and resave.
+  $form = form_get_cache($form_build_id, $form_state);
+  if ($form['revision_information']['log']['#required'] === TRUE) {
+    $form['revision_information']['log']['#required'] = FALSE;
+  }
+  else {
+    $form['revision_information']['log']['#required'] = TRUE;
+  }
+  form_set_cache($form_build_id, $form, $form_state);
+  $form += array(
+    '#post' => $_POST,
+    '#programmed' => FALSE,
+  );
+  // Rebuild the form.
+  $form = form_builder($_POST['form_id'], $form, $form_state);
+
+ 
+  // Render the new output.
+  $new_form = $form['revision_information']['log'];
+
+  return drupal_json(array(
+    'status' => TRUE,
+    'data' => drupal_render($new_form),
+  ));
 }

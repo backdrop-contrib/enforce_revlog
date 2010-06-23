@@ -2,13 +2,27 @@
 // $Id$
 
 /**
+ * Implementation of hook_install().
+ */
+
+function enforce_revlog_install() {
+  drupal_set_message(st('Go to the <a href="@settings">settings page</a> to configure enforce_revlog', array('@setperms' => url('admin/settings/enforce_revlog'))));
+}
+
+/**
  * Implementation of hook_uninstall().
  */
 function enforce_revlog_uninstall() {
-  // Delete admin_skip variable.
-    variable_del(enforce_revlog_admin_skip);
-  // Delete node type mapping variables.
-  foreach (node_get_types() as $type => $name) {
-    variable_del(enforce_revlog_node_type_ . $type);
+  // Delete admin_skip variable. Kept for backward compatibility
+  variable_del('enforce_revlog_admin_skip');
+  // Delete node type mapping variables, even if node type has been deleted in the meantime.
+  db_query("DELETE FROM {variable} WHERE name LIKE 'enforce_revlog_node_type_%'");
+  cache_clear_all('variables', 'cache');
+  global $conf;
+  foreach (array_keys($conf) as $vartodel) {
+    if (substr($vartodel, 0, 25) == 'enforce_revlog_node_type_') {
+      unset($conf[$vartodel]);
+    }
   }
+
 }
