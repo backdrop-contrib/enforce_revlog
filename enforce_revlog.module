@@ -57,7 +57,7 @@ function enforce_revlog_settings() {
     $form['types']['enforce_revlog_node_type_' . $type] = array(
       '#type' => 'checkbox',
       '#title' => $type,
-      '#default_value' => variable_get(enforce_revlog_node_type_ . $type, 0),
+      '#default_value' => variable_get('enforce_revlog_node_type_' . $type, 0),
     );
   }
 
@@ -78,7 +78,7 @@ function enforce_revlog_nodeapi(&$node, $op, $arg = 0) {
       * If revision is checked and log message is empty, complain,
       * unless this is new content or user is allowed to.
       * Don't bother if user is only previewing the node. */
-      if ($node->revision && variable_get(enforce_revlog_node_type_ . $node->type, 0) && $node->nid && empty($node->log)) {
+      if ($node->revision && variable_get('enforce_revlog_node_type_' . $node->type, 0) && $node->nid && empty($node->log)) {
         if (user_access('skip revision log message')) {
           break;
         }
@@ -114,16 +114,16 @@ function enforce_revlog_help($path, $arg) {
 * 
 * Trying to identify all node forms to enable log message textarea as required
 */
-
 function enforce_revlog_form_alter(&$form, $form_state, $form_id) {
   if (isset($form['#id']) && $form['#id'] == 'node-form') {
     $form_name = $form['type']['#value'] . '_node_form';
     switch ($form_id) {
       case $form_name:
         // identify if we should require a log message for this content type with this user
+        $access = user_access('skip revision log message');
         if (
-          variable_get(enforce_revlog_node_type_ . $form['type']['#value'], 1)
-          && !user_access('skip revision log message', 1)
+          variable_get('enforce_revlog_node_type_' . $form['type']['#value'], 0)
+          && !$access
           ) {
           $form['revision_information']['revision']['#ahah'] = array(
             'event' => 'change',  // not necessary (default value), added for exhaustivity
@@ -168,4 +168,25 @@ function enforce_revlog_js() {
     'status' => TRUE,
     'data' => drupal_render($new_form),
   ));
+}
+
+/**
+* Implementation of hook_node_type().
+* 
+* Deleting associated variable when content type is deleted / updated
+* Avoiding issues with unused variables and hook_uninstall()
+*/
+function enforce_revlog_node_type($op, $info) {
+  switch ($op) {
+    case 'delete':
+      variable_del('enforce_revlog_node_type_' . $info->type);
+      break;
+    case 'update':
+      if (!empty($info->old_type) && $info->old_type != $info->type) {
+        $settings = variable_get('enforce_revlog_node_type_' . $info->old_type, 0);
+        variable_del('enforce_revlog_node_type_' . $info->old_type);
+        variable_set('enforce_revlog_node_type_' . $info->type, $settings);
+      }
+      break;
+  }
 }
