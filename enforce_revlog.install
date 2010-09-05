@@ -16,6 +16,10 @@ function enforce_revlog_install() {
 function enforce_revlog_uninstall() {
   // Delete admin_skip variable. Kept for backward compatibility
   variable_del('enforce_revlog_admin_skip');
+
+  // Delete revision revert variable
+  variable_del('enforce_revlog_revision_revert');
+
   /**
    * Delete node type mapping variables.
    * See also enforce_revlog_node_type() in .module file

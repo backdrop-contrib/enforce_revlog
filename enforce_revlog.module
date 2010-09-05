@@ -46,6 +46,12 @@ function enforce_revlog_settings() {
     '#prefix' => '<p><em>',
     '#suffix' => '</em></p>',
   );
+
+  $form['enforce_revlog_revision_revert'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Enforce users to enter a log message when reverting a revision'),
+    '#default_value' => variable_get('enforce_revlog_revision_revert', 0),
+  );
   
   $form['types'] = array(
     '#type' => 'fieldset',
@@ -115,27 +121,39 @@ function enforce_revlog_help($path, $arg) {
 * Trying to identify all node forms to enable log message textarea as required
 */
 function enforce_revlog_form_alter(&$form, $form_state, $form_id) {
-  if (isset($form['#id']) && $form['#id'] == 'node-form') {
-    $form_name = $form['type']['#value'] . '_node_form';
-    switch ($form_id) {
-      case $form_name:
-        // identify if we should require a log message for this content type with this user
-        $access = user_access('skip revision log message');
-        if (
-          variable_get('enforce_revlog_node_type_' . $form['type']['#value'], 0)
-          && !$access
-          ) {
-          $form['revision_information']['revision']['#ahah'] = array(
-            'event' => 'change',  // not necessary (default value), added for exhaustivity
-            'path' => 'enforce_revlog/js',
-            'wrapper' => 'edit-log-wrapper',
-          );
-          if (isset($form['#node']) && $form['#node']->revision) {
-            $form['revision_information']['log']['#required'] = TRUE;
-          }
+  switch ($form['#id']) {
+    case 'node-form':
+      // identify if we should require a log message for this content type with this user
+      $access = user_access('skip revision log message');
+      if (
+        variable_get('enforce_revlog_node_type_' . $form['type']['#value'], 0)
+        && !$access
+        ) {
+        $form['revision_information']['revision']['#ahah'] = array(
+          'event' => 'change',  // not necessary (default value), added for exhaustivity
+          'path' => 'enforce_revlog/js',
+          'wrapper' => 'edit-log-wrapper',
+        );
+        if (isset($form['#node']) && $form['#node']->revision) {
+          $form['revision_information']['log']['#required'] = TRUE;
         }
-        break;
-    }
+      }
+      break;
+    case 'node-revision-revert-confirm':
+      // add a log message textarea to the revision revert form -  copy the one from node.module
+      global $user;
+      $form['log'] = array(
+        '#type' => 'textarea',
+        '#title' => t('Log message'),
+        '#default_value' => (isset($node->log) ? $node->log : ''),
+        '#rows' => 2,
+        '#description' => t('An explanation of your reasons for reverting the revision to help other authors understand your motivations.'),
+        '#required' => variable_get('enforce_revlog_revision_revert', 0) && !user_access('skip revision log message') ? TRUE : FALSE,
+      );
+      
+      // overriding submit handler to use our own 
+      $form['#submit'] = array('enforce_revlog_node_revision_revert_confirm_submit');
+      break;
   }
 }
 
@@ -189,4 +207,23 @@ function enforce_revlog_node_type($op, $info) {
       }
       break;
   }
+}
+
+/**
+ * Custom handler for node_revision_revert_confirm form
+ * Just a copy of the one in node.module with extra functionality
+ */
+function enforce_revlog_node_revision_revert_confirm_submit($form, &$form_state) {
+  $node_revision = $form['#node_revision'];
+  $node_revision->revision = 1;
+  $node_revision->log = t('Copy of the revision from %date. ', array('%date' => format_date($node_revision->revision_timestamp))) . check_plain($form_state['values']['log']);
+  if (module_exists('taxonomy')) {
+    $node_revision->taxonomy = array_keys($node_revision->taxonomy);
+  }
+
+  node_save($node_revision);
+
+  watchdog('content', '@type: reverted %title revision %revision.', array('@type' => $node_revision->type, '%title' => $node_revision->title, '%revision' => $node_revision->vid));
+  drupal_set_message(t('@type %title has been reverted back to the revision from %revision-date.', array('@type' => node_get_types('name', $node_revision), '%title' => $node_revision->title, '%revision-date' => format_date($node_revision->revision_timestamp))));
+  $form_state['redirect'] = 'node/'. $node_revision->nid .'/revisions';
 }
