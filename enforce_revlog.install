@@ -7,7 +7,7 @@
 
 function enforce_revlog_install() {
   $t = get_t();
-  drupal_set_message($t('Go to the <a href="@settings">settings page</a> to configure enforce_revlog', array('@setperms' => url('admin/settings/enforce_revlog'))));
+  drupal_set_message($t('Go to the <a href="@settings">settings page</a> to configure enforce_revlog', array('@settings' => url('admin/settings/enforce_revlog'))));
 }
 
 /**

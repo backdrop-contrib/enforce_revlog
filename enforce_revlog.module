@@ -1,10 +1,10 @@
 <?php
 // $Id$
 
-/* TODO
- * More doc
- * Display help message after installation
- * */
+/**
+ * TODO:
+ * - Make comments follow more closely the Doxygen format
+ */
 
 /**
 * Implementation of hook_perm().
@@ -38,7 +38,9 @@ function enforce_revlog_menu() {
   return $items;
 }
 
-// Content of the settings page
+/**
+ * Settings page
+ */
 function enforce_revlog_settings() {
   $form['info_msg'] = array(
     '#type' => 'markup',  // not necessary (default value), added for exhaustivity
@@ -67,7 +69,6 @@ function enforce_revlog_settings() {
     );
   }
 
-  
   return system_settings_form($form);
 }
 
@@ -77,26 +78,32 @@ function enforce_revlog_settings() {
 * Displays a message when the revision log is empty.
 */
 function enforce_revlog_nodeapi(&$node, $op, $arg = 0) {
-
   switch ($op) {
     case 'validate':
-      /* For enabled content types:
-      * If revision is checked and log message is empty, complain,
-      * unless this is new content or user is allowed to.
-      * Don't bother if user is only previewing the node. */
-      if ($node->revision && variable_get('enforce_revlog_node_type_' . $node->type, 0) && $node->nid && empty($node->log)) {
-        if (user_access('skip revision log message')) {
-          break;
-        }
-        elseif (user_access('administer nodes')) {
-          // Adjust the message for administrators, who can choose not to create a new revision
-          form_set_error('log', t('Please enter a revision log message or uncheck the revision checkbox.'));
-        }
-        else {
-          // Standard error message
-          form_set_error('log', t('Please enter a revision log message.'));
-        }
+      // A log message will only be required if:
+      if (
+        $node->nid  // the node has already been created 
+        && $node->revision  // a new revision is about to be created
+        && $node->op == $node->submit  // the node is about to be saved to database
+        && variable_get('enforce_revlog_node_type_' . $node->type, 0)  // enforce_revlog is enabled for this content type
+        && !user_access('administer nodes')  // user is not a node administrator
+        && !user_access('skip revision log message')  // user cannot skip entering a log message
+        && empty($node->log)  // log message is empty
+      ) {
+        form_set_error('log', t('Please enter a revision log message.'));
       }
+      break;
+    case 'presave':
+      // Trigger only if we're reverting a revision
+      // Determined thanks to a custom property in the node object
+      if (!empty($node->enforce_revlog_revision_revert)) {
+        // Adding the custom log message to the standard one
+        $node->log = $node->enforce_revlog_log_message . ' (' . $node->log . ')';
+
+        // Deleting custom object properties, there aren't needed anymore
+        unset($node->enforce_revlog_log_message, $node->enforce_revlog_revision_revert);
+      }
+      break;
   }
 }
 
@@ -123,40 +130,76 @@ function enforce_revlog_help($path, $arg) {
 function enforce_revlog_form_alter(&$form, $form_state, $form_id) {
   switch ($form['#id']) {
     case 'node-form':
-      // identify if we should require a log message for this content type with this user
-      $access = user_access('skip revision log message');
+     // We should enable enforce_revlog on this form if:
       if (
-        variable_get('enforce_revlog_node_type_' . $form['type']['#value'], 0)
-        && !$access
+        $form['nid']['#value']  // node has already been created
+        && variable_get('enforce_revlog_node_type_' . $form['type']['#value'], 0)  // enforce_revlog is enabled for this content type
+        && !user_access('administer nodes')  // user is not a node administrator
+        && !user_access('skip revision log message')  // user cannot skip entering a log message
         ) {
+        
+        // Triggering AHAH handler on enabling / disabling creation of a new revision
         $form['revision_information']['revision']['#ahah'] = array(
           'event' => 'change',  // not necessary (default value), added for exhaustivity
           'path' => 'enforce_revlog/js',
           'wrapper' => 'edit-log-wrapper',
         );
-        if (isset($form['#node']) && $form['#node']->revision) {
-          $form['revision_information']['log']['#required'] = TRUE;
+       
+        // Mark the log message as required if creation of a new revision is enabled
+        if (!empty($form['#node']->revision)) {
+          // Using a custom theme function here instead of setting the #required property
+          // to prevent validation issues we would encounter otherwise
+          $form['revision_information']['log']['#theme'] = 'enforce_revlog_log_message';
         }
       }
       break;
     case 'node-revision-revert-confirm':
-      // add a log message textarea to the revision revert form -  copy the one from node.module
-      global $user;
+      // Add a log message textarea to the revision revert form - adapt the one from node.module
       $form['log'] = array(
         '#type' => 'textarea',
         '#title' => t('Log message'),
-        '#default_value' => (isset($node->log) ? $node->log : ''),
+        '#default_value' => '',
         '#rows' => 2,
         '#description' => t('An explanation of your reasons for reverting the revision to help other authors understand your motivations.'),
-        '#required' => variable_get('enforce_revlog_revision_revert', 0) && !user_access('skip revision log message') ? TRUE : FALSE,
+        '#required' => variable_get('enforce_revlog_revision_revert', 0) && (!user_access('skip revision log message') || !user_access('administer nodes')) ? TRUE : FALSE,
       );
+
+      // Adding our own properties to the node object for future use
+      $form['#node_revision']->enforce_revlog_revision_revert = 1;
+      $form['#node_revision']->enforce_revlog_log_message = '';
       
-      // overriding submit handler to use our own 
-      $form['#submit'] = array('enforce_revlog_node_revision_revert_confirm_submit');
+      // Custom validation function
+      $form['#validate'][] = 'enforce_revlog_revision_revert_validate';   
       break;
+    case 'node-type-form':
+      // Adding enforce_revlog setting on the content type editing form.
+      // Value will be automatically saved in the variable table.
+      // Content type name changes are handled automatically too.
+      $form['workflow']['enforce_revlog_node_type'] = array(
+        '#type' => 'radios',
+        '#title' => t('Enforce users to enter a log message for every revision'),
+        '#description' => t('Revisions must be enabled for this module to work'),
+        '#default_value' => variable_get('enforce_revlog_node_type_' . $form['#node_type']->type, 0),
+        '#options' => array(t('Disabled'), t('Enabled')),
+      );
+    break;
   }
 }
 
+/**
+ * Validation function for the revision revert form
+ * Passing $form by reference to store changes to the object
+ */
+function enforce_revlog_revision_revert_validate(&$form, &$form_state) {
+  // Storing the custom log message in the node object
+  $form['#node_revision']->enforce_revlog_log_message = check_plain($form_state['values']['log']);
+}
+
+/**
+ * Helper AHAH function to change the required state of the log message textarea.
+ * Allows visual feedback by the user.
+ * This function is only triggered when the right conditions are met.
+ */
 function enforce_revlog_js() {
   $form_state = array('submitted' =>  FALSE);
   $form_build_id = $_POST['form_build_id'];
@@ -164,12 +207,11 @@ function enforce_revlog_js() {
   // form, Drupal is not aware of this new element's existence and will not
   // process it. We retreive the cached form, add the element, and resave.
   $form = form_get_cache($form_build_id, $form_state);
-  if ($form['revision_information']['log']['#required'] === TRUE) {
-    $form['revision_information']['log']['#required'] = FALSE;
-  }
-  else {
-    $form['revision_information']['log']['#required'] = TRUE;
-  }
+
+  // Switching theme function used to render the log message textarea. Will switch the "required" state.
+  // We cannot use the #required property due to validation issues otherwise
+  $form['revision_information']['log']['#theme'] = empty($form['revision_information']['log']['#theme']) ? 'enforce_revlog_log_message' : NULL;
+
   form_set_cache($form_build_id, $form, $form_state);
   $form += array(
     '#post' => $_POST,
@@ -191,39 +233,34 @@ function enforce_revlog_js() {
 /**
 * Implementation of hook_node_type().
 * 
-* Deleting associated variable when content type is deleted / updated
+* Deleting associated variable when content type is deleted
 * Avoiding issues with unused variables and hook_uninstall()
+* Update is handled automatically
 */
 function enforce_revlog_node_type($op, $info) {
   switch ($op) {
     case 'delete':
       variable_del('enforce_revlog_node_type_' . $info->type);
       break;
-    case 'update':
-      if (!empty($info->old_type) && $info->old_type != $info->type) {
-        $settings = variable_get('enforce_revlog_node_type_' . $info->old_type, 0);
-        variable_del('enforce_revlog_node_type_' . $info->old_type);
-        variable_set('enforce_revlog_node_type_' . $info->type, $settings);
-      }
-      break;
   }
 }
 
 /**
- * Custom handler for node_revision_revert_confirm form
- * Just a copy of the one in node.module with extra functionality
+ * Implementation of hook_theme()
  */
-function enforce_revlog_node_revision_revert_confirm_submit($form, &$form_state) {
-  $node_revision = $form['#node_revision'];
-  $node_revision->revision = 1;
-  $node_revision->log = t('Copy of the revision from %date. ', array('%date' => format_date($node_revision->revision_timestamp))) . check_plain($form_state['values']['log']);
-  if (module_exists('taxonomy')) {
-    $node_revision->taxonomy = array_keys($node_revision->taxonomy);
-  }
+function enforce_revlog_theme() {
+  return array(
+    'enforce_revlog_log_message' => array(
+      'arguments' => array('element' => NULL),
+    ),
+  );
+}
 
-  node_save($node_revision);
-
-  watchdog('content', '@type: reverted %title revision %revision.', array('@type' => $node_revision->type, '%title' => $node_revision->title, '%revision' => $node_revision->vid));
-  drupal_set_message(t('@type %title has been reverted back to the revision from %revision-date.', array('@type' => node_get_types('name', $node_revision), '%title' => $node_revision->title, '%revision-date' => format_date($node_revision->revision_timestamp))));
-  $form_state['redirect'] = 'node/'. $node_revision->nid .'/revisions';
+/**
+ * Custom theme function for the log message element
+ */
+function theme_enforce_revlog_log_message($element) {
+  // Setting the #required property here as it won't affect the form - only the display
+  $element['#required'] = TRUE;
+  return theme('textarea', $element);
 }
