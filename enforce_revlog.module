@@ -86,11 +86,12 @@ function enforce_revlog_nodeapi(&$node, $op, $arg = 0) {
         && $node->revision  // a new revision is about to be created
         && $node->op == $node->submit  // the node is about to be saved to database
         && variable_get('enforce_revlog_node_type_' . $node->type, 0)  // enforce_revlog is enabled for this content type
-        && !user_access('administer nodes')  // user is not a node administrator
         && !user_access('skip revision log message')  // user cannot skip entering a log message
         && empty($node->log)  // log message is empty
       ) {
-        form_set_error('log', t('Please enter a revision log message.'));
+        // different message if user is a node administrator
+        $message = user_access('administer nodes') ? t('Please enter a revision log message or uncheck the revision checkbox.') : t('Please enter a revision log message.');
+        form_set_error('log', $message);
       }
       break;
     case 'presave':
@@ -134,7 +135,6 @@ function enforce_revlog_form_alter(&$form, $form_state, $form_id) {
       if (
         $form['nid']['#value']  // node has already been created
         && variable_get('enforce_revlog_node_type_' . $form['type']['#value'], 0)  // enforce_revlog is enabled for this content type
-        && !user_access('administer nodes')  // user is not a node administrator
         && !user_access('skip revision log message')  // user cannot skip entering a log message
         ) {
         
@@ -161,7 +161,7 @@ function enforce_revlog_form_alter(&$form, $form_state, $form_id) {
         '#default_value' => '',
         '#rows' => 2,
         '#description' => t('An explanation of your reasons for reverting the revision to help other authors understand your motivations.'),
-        '#required' => variable_get('enforce_revlog_revision_revert', 0) && (!user_access('skip revision log message') || !user_access('administer nodes')) ? TRUE : FALSE,
+        '#required' => variable_get('enforce_revlog_revision_revert', 0) && !user_access('skip revision log message') ? TRUE : FALSE,
       );
 
       // Adding our own properties to the node object for future use

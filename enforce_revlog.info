@@ -2,4 +2,4 @@
 name = Enforce revlog
 description = Enforce log messages for every revision
 core = 6.x
-package = "Other"
+package = User interface
