@@ -9,7 +9,7 @@
 /**
 * Implementation of hook_perm().
 * 
-* Adding permission for some roles to skip the checking.
+* Adding permission for skipping the check.
 */
 function enforce_revlog_perm() {
   return array('skip revision log message');
@@ -18,7 +18,7 @@ function enforce_revlog_perm() {
 /**
  * Implementation of hook_menu().
  * 
- * Administration page for Enforce revlog
+ * Administration page and JS callback
  */
 function enforce_revlog_menu() {
   $items = array();
@@ -231,12 +231,13 @@ function enforce_revlog_js() {
 }
 
 /**
-* Implementation of hook_node_type().
-* 
-* Deleting associated variable when content type is deleted
-* Avoiding issues with unused variables and hook_uninstall()
-* Update is handled automatically
-*/
+ * Implementation of hook_node_type().
+ * 
+ * Deleting associated variable when content type is deleted
+ * Avoiding issues with unused variables and hook_uninstall()
+ * Update is handled automatically
+ * @see enforce_revlog_uninstall().
+ */
 function enforce_revlog_node_type($op, $info) {
   switch ($op) {
     case 'delete':
@@ -247,6 +248,7 @@ function enforce_revlog_node_type($op, $info) {
 
 /**
  * Implementation of hook_theme()
+ * Enabling custom theme implementation
  */
 function enforce_revlog_theme() {
   return array(
@@ -258,6 +260,7 @@ function enforce_revlog_theme() {
 
 /**
  * Custom theme function for the log message element
+ * Faking the #required property without triggering the automatic validation
  */
 function theme_enforce_revlog_log_message($element) {
   // Setting the #required property here as it won't affect the form - only the display

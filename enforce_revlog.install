@@ -12,6 +12,7 @@ function enforce_revlog_install() {
 
 /**
  * Implementation of hook_uninstall().
+ * @see enforce_revlog_node_type().
  */
 function enforce_revlog_uninstall() {
   // Delete admin_skip variable. Kept for backward compatibility
