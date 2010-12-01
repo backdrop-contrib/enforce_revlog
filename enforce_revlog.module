@@ -2,6 +2,12 @@
 // $Id$
 
 /**
+ * @file
+ * Allows enforcing unpriviledged users to enter a log message every time
+ * a node revision is created or reverted
+ */
+
+/**
  * TODO:
  * - Make comments follow more closely the Doxygen format
  */

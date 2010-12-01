@@ -2,6 +2,11 @@
 // $Id$
 
 /**
+ * @file
+ * (Un)Installation routines for enforce_revlog
+ */
+
+/**
  * Implementation of hook_install().
  */
 
@@ -12,7 +17,6 @@ function enforce_revlog_install() {
 
 /**
  * Implementation of hook_uninstall().
- * @see enforce_revlog_node_type().
  */
 function enforce_revlog_uninstall() {
   // Delete admin_skip variable. Kept for backward compatibility
@@ -23,7 +27,7 @@ function enforce_revlog_uninstall() {
 
   /**
    * Delete node type mapping variables.
-   * See also enforce_revlog_node_type() in .module file
+   * @see enforce_revlog_node_type()
    */
   foreach (node_get_types() as $type => $name) {
     variable_del('enforce_revlog_node_type_' . $type);
