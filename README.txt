@@ -15,11 +15,11 @@ Make sure that "Create new revision" is checked as the default behavior for the 
 USAGE
 =====
 
-- Enable the module "Enforce revlog" in admin/build/modules
+- Enable the module "Enforce revlog" in admin/modules
 
-- Go to admin/user/permissions to set the permission "skip revision log message" for relevant roles
+- Go to admin/people/permissions to set the permission "skip revision log message" for relevant roles
 
-- Go to admin/settings/enforce_revlog to configure the module and activate it on the content types where it is needed.
+- Go to admin/config/user-interface/enforce_revlog to configure the module and activate it on the content types where it is needed.
 
 - Alternatively you can (de)activate Enforce revlog for a given content type on its content type editing form
 
