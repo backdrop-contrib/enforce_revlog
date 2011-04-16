@@ -7,15 +7,10 @@
  */
 
 /**
- * TODO:
- * - Make comments follow more closely the Doxygen format
+ * Implements hook_permission().
+ *
+ * Adding permission for skipping the check.
  */
-
-/**
-* Implementation of hook_permission().
-* 
-* Adding permission for skipping the check.
-*/
 function enforce_revlog_permission() {
   return array(
     'skip revision log message' => array(
@@ -26,8 +21,8 @@ function enforce_revlog_permission() {
 }
 
 /**
- * Implementation of hook_menu().
- * 
+ * Implements hook_menu().
+ *
  * Administration page and JS callback
  */
 function enforce_revlog_menu() {
@@ -40,11 +35,6 @@ function enforce_revlog_menu() {
     'access callback' => 'user_access',
     'access arguments' => array('administer site configuration'),
   );
-  $items['enforce_revlog/js'] = array(
-    'page callback' => 'enforce_revlog_js',
-    'access arguments' => array('access content'),
-    'type' => MENU_CALLBACK,
-  );
   return $items;
 }
 
@@ -54,7 +44,7 @@ function enforce_revlog_menu() {
 function enforce_revlog_settings() {
   $form['info_msg'] = array(
     '#type' => 'markup',  // not necessary (default value), added for exhaustivity
-    '#value' => t('Do not forget to <a href="@setperms">set permissions</a> for roles that will be able to skip entering a log message', array('@setperms' => url('admin/user/permissions', array('fragment' => 'module-enforce_revlog')))),  // use placeholder and url() as it's best practice for these translatable strings
+    '#value' => t('Do not forget to <a href="@setperms">set permissions</a> for roles that will be able to skip entering a log message', array('@setperms' => url('admin/people/permissions', array('fragment' => 'module-enforce_revlog')))),  // use placeholder and url() as it's best practice for these translatable strings
     '#prefix' => '<p><em>',
     '#suffix' => '</em></p>',
   );
@@ -64,7 +54,7 @@ function enforce_revlog_settings() {
     '#title' => t('Enforce users to enter a log message when reverting a revision'),
     '#default_value' => variable_get('enforce_revlog_revision_revert', 0),
   );
-  
+
   $form['types'] = array(
     '#type' => 'fieldset',
     '#title' => t('Enforce users to enter a log message for every revision of these content types'),
@@ -83,28 +73,7 @@ function enforce_revlog_settings() {
 }
 
 /**
-* Implementation of hook_node_validate()
-*
-* Displays a message when the revision log is empty.
-*/
-function enforce_revlog_node_validate($node, $form, &$form_state) {
-  // A log message will only be required if:
-  if (
-    $node->nid  // the node has already been created 
-    && $node->revision  // a new revision is about to be created
-    && $node->op == $node->submit  // the node is about to be saved to database
-    && variable_get('enforce_revlog_node_type_' . $node->type, 0)  // enforce_revlog is enabled for this content type
-    && !user_access('skip revision log message')  // user cannot skip entering a log message
-    && empty($node->log)  // log message is empty
-  ) {
-    // different message if user is a node administrator
-    $message = user_access('administer nodes') ? t('Please enter a revision log message or uncheck the revision checkbox.') : t('Please enter a revision log message.');
-    form_set_error('log', $message);
-  }
-}
-
-/**
- * Implementation of hook_node_presave
+ * Implements hook_node_presave().
  */
 function enforce_revlog_node_presave($node) {
   // Trigger only if we're reverting a revision
@@ -119,7 +88,7 @@ function enforce_revlog_node_presave($node) {
 }
 
 /**
- * Implementation of hook_help()
+ * Implements hook_help().
  */
 function enforce_revlog_help($path, $arg) {
   switch ($path) {
@@ -128,16 +97,16 @@ function enforce_revlog_help($path, $arg) {
       return '<p>' . t('Enforce users to enter a log message for every revision.') . '</p>';
     case 'admin/config/user-interface/enforce_revlog':
       // Settings page header
-      return '<p>' . t('Settings for the Enforce revlog module.') . '</p>';
+      return '<p>' . t('Settings for Enforce revlog module.') . '</p>';
   }
 }
 
 /**
-* Implementation of hook_form_alter().
-* 
-* Trying to identify all node forms to enable log message textarea as required
-*/
-function enforce_revlog_form_alter(&$form, $form_state, $form_id) {
+ * Implements hook_form_alter().
+ *
+ * Trying to identify all node forms to enable log message textarea as required
+ */
+function enforce_revlog_form_alter(&$form, &$form_state, $form_id) {
   if (strpos($form_id, 'node_form')) {
    // We should enable enforce_revlog on this form if:
     if (
@@ -145,26 +114,22 @@ function enforce_revlog_form_alter(&$form, $form_state, $form_id) {
       && variable_get('enforce_revlog_node_type_' . $form['type']['#value'], 0)  // enforce_revlog is enabled for this content type
       && !user_access('skip revision log message')  // user cannot skip entering a log message
         ) {
-      
-// TODO add prefix and suffix to trigger AJAX behavior  
-      // Triggering AJAX behavior on enabling / disabling creation of a new revision
-/*      $form['revision_information']['revision']['#ajax'] = array(
-        'callback' => 'enforce_revlog_js',
-        'wrapper' => 'form-item-log',
-      );*/
-       
+
       // Mark the log message as required if creation of a new revision is enabled
       if (!empty($form['#node']->revision)) {
-        // Using a custom theme function here instead of setting the #required property
-        // to prevent validation issues we would encounter otherwise
-//        $form['revision_information']['log']['#theme_wrappers'] = 'enforce_revlog_log_message';
-//        $form['revision_information']['log']['#required'] = TRUE;
+        $form['revision_information']['log']['#prefix'] = '<div id="enforce-revlog-wrapper">';
+        $form['revision_information']['log']['#suffix'] = '</div>';
+        $form['revision_information']['log']['#required'] = (bool) $form['revision_information']['revision']['#default_value'];
+
+        $form['revision_information']['revision']['#ajax'] = array(
+          'callback' => 'enforce_revlog_js',
+          'wrapper' => 'enforce-revlog-wrapper',
+        );
       }
     }
-//*/
   }
 
-  elseif ($form_id == 'node-revision-revert-confirm') {
+  elseif ($form_id == 'node_revision_revert_confirm') {
     // Add a log message textarea to the revision revert form - adapt the one from node.module
     $form['log'] = array(
       '#type' => 'textarea',
@@ -172,15 +137,15 @@ function enforce_revlog_form_alter(&$form, $form_state, $form_id) {
       '#default_value' => '',
       '#rows' => 2,
       '#description' => t('An explanation of your reasons for reverting the revision to help other authors understand your motivations.'),
-      '#required' => variable_get('enforce_revlog_revision_revert', 0) && !user_access('skip revision log message') ? TRUE : FALSE,
+      '#required' => variable_get('enforce_revlog_revision_revert', 0) && !user_access('skip revision log message'),
     );
 
     // Adding our own properties to the node object for future use
     $form['#node_revision']->enforce_revlog_revision_revert = 1;
     $form['#node_revision']->enforce_revlog_log_message = '';
-      
+
     // Custom validation function
-    $form['#validate'][] = 'enforce_revlog_revision_revert_validate';   
+    $form['#validate'][] = 'enforce_revlog_revision_revert_validate';
   }
 
   elseif ($form_id == 'node_type_form') {
@@ -207,74 +172,23 @@ function enforce_revlog_revision_revert_validate(&$form, &$form_state) {
 }
 
 /**
- * Helper AHAH function to change the required state of the log message textarea.
+ * AJAX callback to change the required state of the log message textarea.
  * Allows visual feedback by the user.
  * This function is only triggered when the right conditions are met.
  */
 function enforce_revlog_js($form, $form_state) {
-/*
-  $form_state = array('submitted' =>  FALSE);
-  $form_build_id = $_POST['form_build_id'];
-  // Add the new element to the stored form. Without adding the element to the
-  // form, Drupal is not aware of this new element's existence and will not
-  // process it. We retreive the cached form, add the element, and resave.
-  $form = form_get_cache($form_build_id, $form_state);
-
-  // Switching theme function used to render the log message textarea. Will switch the "required" state.
-  // We cannot use the #required property due to validation issues otherwise
-//*/
-  return $form['revision_information']['log']['#theme'] = empty($form['revision_information']['log']['#theme']) ? 'enforce_revlog_log_message' : NULL;
-
-/*
-  form_set_cache($form_build_id, $form, $form_state);
-  $form += array(
-    '#post' => $_POST,
-    '#programmed' => FALSE,
-  );
-  // Rebuild the form.
-  $form = form_builder($_POST['form_id'], $form, $form_state);
-
- 
-  // Render the new output.
-  $new_form = $form['revision_information']['log'];
-
-  return drupal_json(array(
-    'status' => TRUE,
-    'data' => drupal_render($new_form),
-  ));
-//*/
+  $form['revision_information']['log']['#required'] = (bool) $form_state['values']['revision'];
+  return $form['revision_information']['log'];
 }
 
 /**
- * Implementation of hook_node_type_delete().
- * 
+ * Implements hook_node_type_delete().
+ *
  * Deleting associated variable when content type is deleted
  * Avoiding issues with unused variables and hook_uninstall()
  * Update is handled automatically
- * @see enforce_revlog_uninstall().
+ * @see enforce_revlog_uninstall()
  */
 function enforce_revlog_node_type_delete($info) {
   variable_del('enforce_revlog_node_type_' . $info->type);
-}
-
-/**
- * Implementation of hook_theme()
- * Enabling custom theme implementation
- */
-function enforce_revlog_theme($existing, $type, $theme, $path) {
-  return array(
-    'enforce_revlog_log_message' => array(
-      'render element' => 'element',
-    ),
-  );
-}
-
-/**
- * Custom theme function for the log message element
- * Faking the #required property without triggering the automatic validation
- */
-function theme_enforce_revlog_log_message($element) {
-  // Setting the #required property here as it won't affect the form - only the display
-  $element['element']['#required'] = TRUE;
-  return theme('form_element', $element);
 }
