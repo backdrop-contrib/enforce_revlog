@@ -73,6 +73,20 @@ function enforce_revlog_settings() {
 }
 
 /**
+ * Implements hook_node_prepare().
+ */
+function enforce_revlog_node_prepare($node) {
+  // We should enable enforce_revlog on add/edit form if:
+  if (
+    $node->nid  // node has already been created
+    && (variable_get('enforce_revlog_node_type_' . $node->type, 0)  // enforce_revlog is enabled for this content type
+      && !user_access('skip revision log message')  // user cannot skip entering a log message
+  ) {
+    $node->enforce_revlog = TRUE;
+  }
+}
+
+/**
  * Implements hook_node_presave().
  */
 function enforce_revlog_node_presave($node) {
@@ -109,13 +123,8 @@ function enforce_revlog_help($path, $arg) {
 function enforce_revlog_form_alter(&$form, &$form_state, $form_id) {
   if (strpos($form_id, 'node_form')) {
 
-   // We should enable enforce_revlog on this form if:
-    if (
-      $form['nid']['#value']  // node has already been created
-      && (variable_get('enforce_revlog_node_type_' . $form['type']['#value'], 0)  // enforce_revlog is enabled for this content type
-        || $GLOBALS['enforce_revlog_active'])
-      && !user_access('skip revision log message')  // user cannot skip entering a log message
-        ) {
+    // Only alter form if enforce_revlog is enabled
+    if ($form['#node']->enforce_revlog) {
 
       // Mark the log message as required if creation of a new revision is enabled
       if (!empty($form['#node']->revision)) {
@@ -193,34 +202,4 @@ function enforce_revlog_js($form, $form_state) {
  */
 function enforce_revlog_node_type_delete($info) {
   variable_del('enforce_revlog_node_type_' . $info->type);
-}
-
-/**
- * Implements hook_context_plugins().
- */
-function enforce_revlog_context_plugins() {
-  $plugins = array();
-  $plugins['enforce_revlog_context_reaction_active'] = array(
-    'handler' => array(
-      'path' => drupal_get_path('module', 'enforce_revlog') .'/plugins',
-      'file' => 'enforce_revlog_context_reaction_active.inc',
-      'class' => 'enforce_revlog_context_reaction_active',
-      'parent' => 'context_reaction',
-    ),
-  );
-  return $plugins;
-}
-
-/**
- * Implements hook_context_registry().
- */
-function enforce_revlog_context_registry() {
-  return array(
-    'reactions' => array(
-      'active' => array(
-        'title' => t('Activate Enforce revlog'),
-        'plugin' => 'enforce_revlog_context_reaction_active',
-      ),
-    ),
-  );
 }
