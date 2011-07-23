@@ -81,7 +81,7 @@ function enforce_revlog_node_prepare($node) {
     $node->nid  // node has already been created
     && (variable_get('enforce_revlog_node_type_' . $node->type, 0)  // enforce_revlog is enabled for this content type
       && !user_access('skip revision log message')  // user cannot skip entering a log message
-  ) {
+  )) {
     $node->enforce_revlog = TRUE;
   }
 }
