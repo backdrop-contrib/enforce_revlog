@@ -76,9 +76,10 @@ function enforce_revlog_settings() {
  * Implements hook_node_prepare().
  */
 function enforce_revlog_node_prepare($node) {
+  $node->enforce_revlog = FALSE;
   // We should enable enforce_revlog on add/edit form if:
   if (
-    $node->nid  // node has already been created
+    isset($node->nid)  // node has already been created
     && (variable_get('enforce_revlog_node_type_' . $node->type, 0)  // enforce_revlog is enabled for this content type
       && !user_access('skip revision log message')  // user cannot skip entering a log message
   )) {
