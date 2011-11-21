@@ -125,7 +125,7 @@ function enforce_revlog_form_alter(&$form, &$form_state, $form_id) {
   if (strpos($form_id, 'node_form')) {
 
     // Only alter form if enforce_revlog is enabled
-    if ($form['#node']->enforce_revlog) {
+    if (!empty($form['#node']->enforce_revlog)) {
 
       // Mark the log message as required if creation of a new revision is enabled
       if (!empty($form['#node']->revision)) {
