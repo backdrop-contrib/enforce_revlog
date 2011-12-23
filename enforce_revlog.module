@@ -124,6 +124,9 @@ function enforce_revlog_help($path, $arg) {
 function enforce_revlog_form_alter(&$form, &$form_state, $form_id) {
   if (strpos($form_id, 'node_form')) {
 
+    // Get required state for revision message
+    $required = isset($form_state['values']['revision']) ? (bool) $form_state['values']['revision'] : (bool) $form['revision_information']['revision']['#default_value'];
+
     // Only alter form if enforce_revlog is enabled
     if (!empty($form['#node']->enforce_revlog)) {
 
@@ -131,7 +134,7 @@ function enforce_revlog_form_alter(&$form, &$form_state, $form_id) {
       if (!empty($form['#node']->revision)) {
         $form['revision_information']['log']['#prefix'] = '<div id="enforce-revlog-wrapper">';
         $form['revision_information']['log']['#suffix'] = '</div>';
-        $form['revision_information']['log']['#required'] = (bool) $form['revision_information']['revision']['#default_value'];
+        $form['revision_information']['log']['#required'] = $required;
 
         $form['revision_information']['revision']['#ajax'] = array(
           'callback' => 'enforce_revlog_js',
