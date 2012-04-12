@@ -61,10 +61,10 @@ function enforce_revlog_settings() {
     '#description' => t('Each selected content type must have revisions enabled for this module to work'),
   );
   // Generate per content-type settings
-  foreach (node_type_get_types() as $type => $name) {
+  foreach (node_type_get_names() as $type => $name) {
     $form['types']['enforce_revlog_node_type_' . $type] = array(
       '#type' => 'checkbox',
-      '#title' => $type,
+      '#title' => $name,
       '#default_value' => variable_get('enforce_revlog_node_type_' . $type, 0),
     );
   }
@@ -141,6 +141,9 @@ function enforce_revlog_form_alter(&$form, &$form_state, $form_id) {
           'wrapper' => 'enforce-revlog-wrapper',
         );
       }
+
+      // Handle buttons before validation
+      $form['#after_build'][] = 'enforce_revlog_after_build';
     }
   }
 
@@ -175,6 +178,23 @@ function enforce_revlog_form_alter(&$form, &$form_state, $form_id) {
       '#options' => array(t('Disabled'), t('Enabled')),
     );
   }
+}
+
+/**
+ * After build callback
+ */
+function enforce_revlog_after_build($form, $form_state) {
+  // Do not require a log message when previewing or deleting the node
+  $excluded = array(
+    $form['actions']['delete']['#value'],
+    $form['actions']['preview']['#value']
+  );
+
+  if (!empty($form_state['input']['op']) && in_array($form_state['input']['op'], $excluded)) {
+    $form['revision_information']['log']['#validated'] = TRUE;
+  }
+
+  return $form;
 }
 
 /**
