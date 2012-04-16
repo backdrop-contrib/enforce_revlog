@@ -186,9 +186,11 @@ function enforce_revlog_form_alter(&$form, &$form_state, $form_id) {
 function enforce_revlog_after_build($form, $form_state) {
   // Do not require a log message when previewing or deleting the node
   $excluded = array(
-    $form['actions']['delete']['#value'],
     $form['actions']['preview']['#value']
   );
+  if (isset($form['actions']['delete']['#value'])) {
+    $excluded[] = $form['actions']['delete']['#value'];
+  }
 
   if (!empty($form_state['input']['op']) && in_array($form_state['input']['op'], $excluded)) {
     $form['revision_information']['log']['#validated'] = TRUE;
