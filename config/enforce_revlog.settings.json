@@ -1,0 +1,6 @@
+{
+    "_config_name": "enforce_revlog.settings",
+    "enforce_revlog_revision_revert": 0,
+    "enforce_create_new_revision": 0,
+    "enforce_revlog_user1": 0
+}

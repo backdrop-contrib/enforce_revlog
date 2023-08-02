@@ -1,5 +1,4 @@
 <?php
-
 /**
  * @file
  * Allows enforcing unpriviledged users to enter a log message every time
@@ -8,29 +7,29 @@
 
 /**
  * Implements hook_permission().
- *
- * Adding permission for skipping the check.
  */
 function enforce_revlog_permission() {
   return array(
     'skip revision log message' => array(
       'title' => t('Skip revision log message'),
-      'description' => t('Skip entering a log message at each new node revision'),
+      'description' => t('Skip entering a log message at each new node revision.'),
+    ),
+    'override force revision' => array(
+      'title' => t('Override create new revision'),
+      'description' => t('Override "Create new revision" on node form when new revisions are the default for the content type.'),
     ),
   );
 }
 
 /**
  * Implements hook_menu().
- *
- * Administration page and JS callback
  */
 function enforce_revlog_menu() {
   $items = array();
-  $items['admin/config/user-interface/enforce_revlog'] = array(
-    'title' => 'Enforce revlog',
-    'description' => 'Enforce users to enter a log message for every revision.',
-    'page callback' => 'drupal_get_form',
+  $items['admin/config/content/enforce-revlog'] = array(
+    'title' => 'Enforce Revision Logs',
+    'description' => 'Enforce the requirement for users to enter a log message for every revision.',
+    'page callback' => 'backdrop_get_form',
     'page arguments' => array('enforce_revlog_settings'),
     'access callback' => 'user_access',
     'access arguments' => array('administer site configuration'),
@@ -39,33 +38,74 @@ function enforce_revlog_menu() {
 }
 
 /**
- * Settings page
+ * Implements hook_config_info().
+ */
+function enforce_revlog_config_info() {
+  $prefixes['enforce_revlog.settings'] = array(
+    'label' => t('Enforce revlog settings'),
+    'group' => t('Configuration'),
+  );
+  return $prefixes;
+}
+
+/**
+ * Settings page.
  */
 function enforce_revlog_settings() {
-  $form['info_msg'] = array(
-    '#type' => 'markup',  // not necessary (default value), added for exhaustivity
-    '#value' => t('Do not forget to <a href="@setperms">set permissions</a> for roles that will be able to skip entering a log message', array('@setperms' => url('admin/people/permissions', array('fragment' => 'module-enforce_revlog')))),  // use placeholder and url() as it's best practice for these translatable strings
-    '#prefix' => '<p><em>',
-    '#suffix' => '</em></p>',
-  );
+  // Get the config for the module.
+  $config = config('enforce_revlog.settings');
+  $form['#config'] = 'enforce_revlog.settings';
 
-  $form['enforce_revlog_revision_revert'] = array(
+  // Define the permission reminder url depending on whether Filter Permissions
+  // module is enabled or not.
+  if (module_exists('filter_perms')) {
+    $reminder_url = url('admin/config/people/permissions/module-enforce_revlog');
+  }
+  else {
+    $reminder_url = url('admin/config/people/permissions', array(
+      'query' => array('search' => 'enforce revision logs'),
+    ));
+  }
+
+  // Global settings.
+  $form['global'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Global settings'),
+    '#description' => t("Don't forget to <a href='@setperms'>set permissions</a> for roles that will be able to skip entering a log message or override creating a new revision.", array(
+      '@setperms' => $reminder_url,
+    )),
+  );
+  $form['global']['enforce_revlog_revision_revert'] = array(
     '#type' => 'checkbox',
-    '#title' => t('Enforce users to enter a log message when reverting a revision'),
-    '#default_value' => variable_get('enforce_revlog_revision_revert', 0),
+    '#title' => t('Enforce log message when reverting a revision'),
+    '#description' => t('Enforce the requirement for users to enter a log message when reverting a revision'),
+    '#default_value' => $config->get('enforce_revlog_revision_revert'),
+  );
+  $form['global']['enforce_create_new_revision'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Enforce "Create new revision"'),
+    '#description' => t('Enforce "Create new revision" if this is the default for the content type.'),
+    '#default_value' => $config->get('enforce_revlog_revision_revert'),
+  );
+  $form['global']['enforce_revlog_user1'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Enforce permissions for User 1'),
+    '#description' => t("Disable 'Skip revision log message' and/or 'Override create new revision' permissions for User 1 if administrators do not have the permission(s)."),
+    '#default_value' => $config->get('enforce_revlog_user1'),
   );
 
+  // Generate per content-type settings.
   $form['types'] = array(
     '#type' => 'fieldset',
-    '#title' => t('Enforce users to enter a log message for every revision of these content types'),
-    '#description' => t('Each selected content type must have revisions enabled for this module to work'),
+    '#title' => t('Content Types'),
+    '#description' => t('Select each content type to enforce. Each selected type must have revisions enabled for this module to work.'),
   );
-  // Generate per content-type settings
+
   foreach (node_type_get_names() as $type => $name) {
     $form['types']['enforce_revlog_node_type_' . $type] = array(
       '#type' => 'checkbox',
       '#title' => $name,
-      '#default_value' => variable_get('enforce_revlog_node_type_' . $type, 0),
+      '#default_value' => $config->get('enforce_revlog_node_type_' . $type),
     );
   }
 
@@ -77,42 +117,71 @@ function enforce_revlog_settings() {
  */
 function enforce_revlog_node_prepare($node) {
   $node->enforce_revlog = FALSE;
-  // We should enable enforce_revlog on add/edit form if:
-  if (
-    isset($node->nid)  // node has already been created
-    && (variable_get('enforce_revlog_node_type_' . $node->type, 0)  // enforce_revlog is enabled for this content type
-      && !user_access('skip revision log message')  // user cannot skip entering a log message
-  )) {
-    $node->enforce_revlog = TRUE;
+
+  // Get config for content type.
+  $enforce_for_content_type = config_get('enforce_revlog.settings', 'enforce_revlog_node_type_' . $node->type);
+
+  // Check if the node exists and whether the content type is set to enforce
+  // the revision log.
+  if (isset($node->nid) && $enforce_for_content_type) {
+    // Check permission for enforcing a log.
+    $node->enforce_revlog = !enforce_revlog_check_permission('skip revision log message');
   }
+}
+
+/**
+ * Checks if user has permission to skip revision log.
+ *
+ * @todo if https://github.com/backdrop/backdrop-issues/issues/6186 is approved
+ * then replace check for admin role permission with user_role_has_permission.
+ *
+ * @param string $permission_name
+ *   The machine name of the permission to check for.
+ *
+ * @return boolean
+ *   TRUE if the role has the permission, FALSE if it does not have the
+ *   permission.
+ */
+function enforce_revlog_check_permission($permission_name) {
+  // Get the defined admin role.
+  $role = user_role_load(config_get('system.core', 'user_admin_role'));
+  // Check the admin role for the permission.
+  if (in_array($permission_name, $role->permissions)) {
+    // If the admin role DOES have the permission, then the check is simply
+    // for whether the user has access.
+    $check_permission = user_access($permission_name);
+  }
+  else {
+    // If the admin role DOES NOT have permission, then we should also check
+    // whether we should enforce for user 1.
+    global $user;
+    $enforce_revlog_user1 = config_get('enforce_revlog.settings', 'enforce_revlog_user1');
+    if ($user->uid == 1 && $enforce_revlog_user1) {
+      $check_permission = FALSE;
+    }
+    else {
+      // It is possible, but unlikely, that another role would have the
+      // permission even though admin does not, so if the user is not User 1,
+      // or the revision log is not enforced for User 1, then we will apply
+      // the generic check.
+      $check_permission = user_access($permission_name);
+    }
+  }
+  return $check_permission;
 }
 
 /**
  * Implements hook_node_presave().
  */
 function enforce_revlog_node_presave($node) {
-  // Trigger only if we're reverting a revision
-  // Determined thanks to a custom property in the node object
+  // Trigger only if we're reverting a revision.
+  // Determined thanks to a custom property in the node object.
   if (!empty($node->enforce_revlog_revision_revert)) {
-    // Adding the custom log message to the standard one
+    // Adding the custom log message to the standard one.
     $node->log = $node->enforce_revlog_log_message . ' (' . $node->log . ')';
 
-    // Deleting custom object properties, there aren't needed anymore
+    // Deleting custom object properties, there aren't needed anymore.
     unset($node->enforce_revlog_log_message, $node->enforce_revlog_revision_revert);
-  }
-}
-
-/**
- * Implements hook_help().
- */
-function enforce_revlog_help($path, $arg) {
-  switch ($path) {
-    case 'admin/help#enforce_revlog':
-      // Help page
-      return '<p>' . t('Enforce users to enter a log message for every revision.') . '</p>';
-    case 'admin/config/user-interface/enforce_revlog':
-      // Settings page header
-      return '<p>' . t('Settings for Enforce revlog module.') . '</p>';
   }
 }
 
@@ -122,16 +191,17 @@ function enforce_revlog_help($path, $arg) {
  * Trying to identify all node forms to enable log message textarea as required
  */
 function enforce_revlog_form_alter(&$form, &$form_state, $form_id) {
+  $config = config('enforce_revlog.settings');
   if (strpos($form_id, 'node_form')) {
-
-    // Get required state for revision message
+    // Get required state for revision message.
     $required = isset($form_state['values']['revision']) ? (bool) $form_state['values']['revision'] : (bool) $form['revision_information']['revision']['#default_value'];
 
-    // Only alter form if enforce_revlog is enabled
+    // Only alter form if enforce_revlog is enabled.
     if (!empty($form['#node']->enforce_revlog)) {
 
-      // Mark the log message as required if creation of a new revision is enabled
       if (!empty($form['#node']->revision)) {
+        // Mark the log message as required if creation of a new revision is
+        // enabled.
         $form['revision_information']['log']['#prefix'] = '<div id="enforce-revlog-wrapper">';
         $form['revision_information']['log']['#suffix'] = '</div>';
         $form['revision_information']['log']['#required'] = $required;
@@ -140,42 +210,49 @@ function enforce_revlog_form_alter(&$form, &$form_state, $form_id) {
           'callback' => 'enforce_revlog_js',
           'wrapper' => 'enforce-revlog-wrapper',
         );
+        // If "Create new revision" is enabled by default for the content type,
+        // then we check whether we should disable that checkbox.
+        if ($required && config_get('enforce_revlog.settings', 'enforce_create_new_revision')) {
+          $permission = !enforce_revlog_check_permission('override force revision');
+          $form['revision_information']['revision']['#disabled'] = $permission;
+        }
       }
 
-      // Handle buttons before validation
+      // Handle buttons before validation.
       $form['#after_build'][] = 'enforce_revlog_after_build';
     }
   }
 
   elseif ($form_id == 'node_revision_revert_confirm') {
-    // Add a log message textarea to the revision revert form - adapt the one from node.module
+    // Add a log message textarea to the revision revert form - adapt the one
+    // from node.module.
     $form['log'] = array(
       '#type' => 'textarea',
       '#title' => t('Log message'),
       '#default_value' => '',
       '#rows' => 2,
       '#description' => t('An explanation of your reasons for reverting the revision to help other authors understand your motivations.'),
-      '#required' => variable_get('enforce_revlog_revision_revert', 0) && !user_access('skip revision log message'),
+      '#required' => $config->get('enforce_revlog_revision_revert') && !enforce_revlog_check_permission('skip revision log message'),
     );
 
-    // Adding our own properties to the node object for future use
+    // Adding our own properties to the node object for future use.
     $form['#node_revision']->enforce_revlog_revision_revert = 1;
     $form['#node_revision']->enforce_revlog_log_message = '';
 
-    // Custom validation function
+    // Custom validation function.
     $form['#validate'][] = 'enforce_revlog_revision_revert_validate';
   }
 
-  elseif ($form_id == 'node_type_form') {
+  elseif ($form_id === 'node_type_form') {
     // Adding enforce_revlog setting on the content type editing form.
     // Value will be automatically saved in the variable table.
     // Content type name changes are handled automatically too.
-    $form['workflow']['enforce_revlog_node_type'] = array(
-      '#type' => 'radios',
+    $form['revision']['revision']['enforce_revlog_node_type'] = array(
+      '#type' => 'checkbox',
       '#title' => t('Enforce users to enter a log message for every revision'),
       '#description' => t('Revisions must be enabled for this module to work'),
-      '#default_value' => variable_get('enforce_revlog_node_type_' . $form['#node_type']->type, 0),
-      '#options' => array(t('Disabled'), t('Enabled')),
+      '#default_value' => $config->get('enforce_revlog_node_type_' . $form['#node_type']->type, 0),
+      // '#options' => array(t('Disabled'), t('Enabled')),
     );
   }
 }
@@ -184,9 +261,9 @@ function enforce_revlog_form_alter(&$form, &$form_state, $form_id) {
  * After build callback
  */
 function enforce_revlog_after_build($form, $form_state) {
-  // Do not require a log message when previewing or deleting the node
+  // Do not require a log message when previewing or deleting the node.
   $excluded = array(
-    $form['actions']['preview']['#value']
+    $form['actions']['preview']['#value'],
   );
   if (isset($form['actions']['delete']['#value'])) {
     $excluded[] = $form['actions']['delete']['#value'];
@@ -204,7 +281,7 @@ function enforce_revlog_after_build($form, $form_state) {
  * Passing $form by reference to store changes to the object
  */
 function enforce_revlog_revision_revert_validate(&$form, &$form_state) {
-  // Storing the custom log message in the node object
+  // Storing the custom log message in the node object.
   $form['#node_revision']->enforce_revlog_log_message = check_plain($form_state['values']['log']);
 }
 
@@ -221,11 +298,8 @@ function enforce_revlog_js($form, $form_state) {
 /**
  * Implements hook_node_type_delete().
  *
- * Deleting associated variable when content type is deleted
- * Avoiding issues with unused variables and hook_uninstall()
- * Update is handled automatically
- * @see enforce_revlog_uninstall()
+ * Delete associated config when content type is deleted.
  */
 function enforce_revlog_node_type_delete($info) {
-  variable_del('enforce_revlog_node_type_' . $info->type);
+  config_clear('enforce_revlog.settings', 'enforce_revlog_node_type_' . $info->type);
 }

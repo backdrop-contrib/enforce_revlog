@@ -1,34 +1,42 @@
 <?php
-
 /**
  * @file
- * (Un)Installation routines for enforce_revlog
+ * Installation routines for enforce_revlog
  */
 
 /**
  * Implements hook_install().
  */
-
 function enforce_revlog_install() {
   $t = get_t();
-  drupal_set_message($t('Go to the <a href="@settings">settings page</a> to configure enforce_revlog', array('@settings' => url('admin/config/user-interface/enforce_revlog'))));
+  backdrop_set_message($t('Go to the <a href="@settings">settings page</a> to configure Enforce Revision Log. You will need to enable for each content type you want to enforce revision logs for.', array(
+    '@settings' => url('admin/config/user-interface/enforce-revlog'),
+  )));
 }
 
 /**
- * Implements hook_uninstall().
+ * Migrate enforce_revlog variables to config.
  */
-function enforce_revlog_uninstall() {
-  // Delete admin_skip variable. Kept for backward compatibility
-  variable_del('enforce_revlog_admin_skip');
+function enforce_revlog_update_1000() {
+  $config = config('enforce_revlog.settings');
 
-  // Delete revision revert variable
-  variable_del('enforce_revlog_revision_revert');
+  // Set the fixed config. We don't need 'enforce_revlog_user1' as it didn't
+  // exist in Drupal 7.
+  $config->set('enforce_revlog_revision_revert', update_variable_get('enforce_revlog_revision_revert', '0'));
 
-  /**
-   * Delete node type mapping variables.
-   * @see enforce_revlog_node_type()
-   */
-  foreach (node_type_get_types() as $type => $name) {
-    variable_del('enforce_revlog_node_type_' . $type);
+  // Set the config for each node type.
+  $node_types = node_type_get_names();
+  foreach ($node_types as $type => $name) {
+    $setting_name = 'enforce_revlog_node_type_' . $type;
+    $config->set($setting_name, update_variable_get($setting_name));
+  }
+  // Save the config.
+  $config->save();
+
+  // Remove fixed Drupal 7 variable.
+  update_variable_del('enforce_revlog_revision_revert');
+  // Remove variable for each node type.
+  foreach ($node_types as $type => $name) {
+    update_variable_del('enforce_revlog_node_type_' . $type);
   }
 }

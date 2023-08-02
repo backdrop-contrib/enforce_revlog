@@ -1,6 +1,11 @@
-name = Enforce revlog
+name = Enforce Revision Logs
 description = Enforce log messages for every revision
-core = 7.x
+backdrop = 1.x
+type = module
 package = User interface
 
-files[] = enforce_revlog.install
+tags[] = Content
+tags[] = Revisions
+tags[] = Editors
+
+configure = admin/config/content/enforce-revlog
