@@ -10,7 +10,7 @@
 function enforce_revlog_install() {
   $t = get_t();
   backdrop_set_message($t('Go to the <a href="@settings">settings page</a> to configure Enforce Revision Log. You will need to enable for each content type you want to enforce revision logs for.', array(
-    '@settings' => url('admin/config/user-interface/enforce-revlog'),
+    '@settings' => url('admin/config/content/enforce-revlog'),
   )));
 }
 
