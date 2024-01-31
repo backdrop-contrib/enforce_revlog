@@ -85,7 +85,7 @@ function enforce_revlog_settings() {
     '#type' => 'checkbox',
     '#title' => t('Enforce "Create new revision"'),
     '#description' => t('Enforce "Create new revision" if this is the default for the content type.'),
-    '#default_value' => $config->get('enforce_revlog_revision_revert'),
+    '#default_value' => $config->get('enforce_create_new_revision'),
   );
   $form['global']['enforce_revlog_user1'] = array(
     '#type' => 'checkbox',
