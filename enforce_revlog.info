@@ -6,7 +6,7 @@ type = module
 maintainers[yorkshire-pudding] = Martin Price
 maintainers_wanted = TRUE
 
-package = User interface
+package = User Interface
 
 tags[] = Content
 tags[] = Revisions
