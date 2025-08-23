@@ -211,7 +211,7 @@ function enforce_revlog_form_alter(&$form, &$form_state, $form_id) {
         if (module_exists('draft_workflow')) {
           // Check if we are editing a revision.
           $args = arg();
-          if (!empty($args[4] && $args[4] == 'edit_revision')) {
+          if (($args[4] ?? '') == 'edit_revision') {
             // If we are get the existing log message for that revision and
             // populate the field with this as the default value.
             $revision_data = node_revision_list($node);
