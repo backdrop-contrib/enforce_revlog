@@ -8,6 +8,8 @@ maintainers_wanted = TRUE
 
 package = User Interface
 
+dependencies[] = system (>=1.26.0)
+
 tags[] = Content
 tags[] = Revisions
 tags[] = Editors
