@@ -196,16 +196,29 @@ function enforce_revlog_form_alter(&$form, &$form_state, $form_id) {
     // Get required state for revision message.
     $required = isset($form_state['values']['revision']) ? (bool) $form_state['values']['revision'] : (bool) $form['revision_information']['revision']['#default_value'];
 
+    $node = $form['#node'];
     // Only alter form if enforce_revlog is enabled.
-    if (!empty($form['#node']->enforce_revlog)) {
+    if (!empty($node->enforce_revlog)) {
 
-      if (!empty($form['#node']->revision)) {
+      if (!empty($node->revision)) {
         // Mark the log message as required if creation of a new revision is
         // enabled.
         $form['revision_information']['log']['#prefix'] = '<div id="enforce-revlog-wrapper">';
         $form['revision_information']['log']['#suffix'] = '</div>';
         $form['revision_information']['log']['#required'] = $required;
 
+        // Add check for draft_workflow module.
+        if (module_exists('draft_workflow')) {
+          // Check if we are editing a revision.
+          $args = arg();
+          if (!empty($args[4] && $args[4] == 'edit_revision')) {
+            // If we are get the existing log message for that revision and
+            // populate the field with this as the default value.
+            $revision_data = node_revision_list($node);
+            $existing_log_message = $revision_data[$node->vid]->log;
+            $form['revision_information']['log']['#default_value'] = $existing_log_message;
+          }
+        }
         $form['revision_information']['revision']['#ajax'] = array(
           'callback' => 'enforce_revlog_js',
           'wrapper' => 'enforce-revlog-wrapper',
