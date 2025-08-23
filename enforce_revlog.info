@@ -4,6 +4,8 @@ backdrop = 1.x
 type = module
 package = User interface
 
+dependencies[] = system (>=1.26.0)
+
 tags[] = Content
 tags[] = Revisions
 tags[] = Editors
