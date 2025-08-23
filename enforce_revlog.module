@@ -143,10 +143,10 @@ function enforce_revlog_node_prepare($node) {
  *   permission.
  */
 function enforce_revlog_check_permission($permission_name) {
-  // Get the defined admin role.
-  $role = user_role_load(config_get('system.core', 'user_admin_role'));
+  // Get the defined admin role name.
+  $admin_role_name = config_get('system.core', 'user_admin_role');
   // Check the admin role for the permission.
-  if (in_array($permission_name, $role->permissions)) {
+  if (user_role_has_permission($permission_name, $admin_role_name)) {
     // If the admin role DOES have the permission, then the check is simply
     // for whether the user has access.
     $check_permission = user_access($permission_name);
