@@ -37,6 +37,10 @@ remove the permissions entirely, including from User 1, which could be
 important to prevent untracked changes or inadvertent data loss that even
 administrators can cause.
 
+This module will work alongside the [Draft Workflow](https://backdropcms.org/project/draft_workflow)
+module, and when editing an existing revision the log message, any existing
+log message will be used.
+
 ### Differences from Drupal 7
 - Allow to force revisions for each modification.
 - Allow to force revision log and force revisions for User 1 if permission is
